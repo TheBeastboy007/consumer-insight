@@ -1,0 +1,12 @@
+{
+  "model_type": "ensemble",
+  "use_score": false,
+  "rebalance": "optimal",
+  "accuracy": 0.8502,
+  "features": 80000,
+  "label_order": [
+    "Negative",
+    "Neutral",
+    "Positive"
+  ]
+}
