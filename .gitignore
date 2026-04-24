@@ -1,8 +1,3 @@
-# Exclude raw and processed dataset files (keep only preprocessed_reviews.csv)
-data/Reviews.csv
-data/processed_reviews.csv
-data/test_dataset.csv
-
 # Python
 __pycache__/
 *.py[cod]
@@ -49,3 +44,5 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+data/Reviews.csv
