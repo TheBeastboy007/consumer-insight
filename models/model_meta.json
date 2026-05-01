@@ -1,9 +1,10 @@
 {
-  "model_type": "ensemble",
-  "use_score": false,
+  "model_type": "svm",
+  "use_score": true,
+  "use_score_feature": true,
   "rebalance": "optimal",
-  "accuracy": 0.8502,
-  "features": 80000,
+  "accuracy": 0.9813,
+  "features": 45001,
   "label_order": [
     "Negative",
     "Neutral",

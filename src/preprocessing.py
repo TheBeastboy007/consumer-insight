@@ -1,23 +1,12 @@
 import re
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
-
-for resource in ["stopwords", "wordnet", "omw-1.4"]:
-    try:
-        nltk.data.find(f"corpora/{resource}")
-    except LookupError:
-        nltk.download(resource)
-
-
-stop_words = set(stopwords.words("english"))
-lemmatizer = WordNetLemmatizer()
+stop_words = set(ENGLISH_STOP_WORDS)
 
 
 def clean_text(text):
 
-    text = text.lower()
+    text = str(text).lower()
 
     text = re.sub(r"<.*?>", "", text)
 
@@ -26,7 +15,5 @@ def clean_text(text):
     words = text.split()
 
     words = [w for w in words if w not in stop_words]
-
-    words = [lemmatizer.lemmatize(w) for w in words]
 
     return " ".join(words)

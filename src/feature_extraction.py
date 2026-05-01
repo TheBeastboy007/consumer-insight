@@ -30,10 +30,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 def create_tfidf(
     text_data,
-    max_word_features: int = 50000,
-    max_char_features: int = 30000,
+    max_word_features: int = 30000,
+    max_char_features: int = 15000,
     ngram_word: tuple = (1, 2),
-    ngram_char: tuple = (3, 5),
+    ngram_char: tuple = (3, 4),
 ):
     """
     Fit and return dual TF-IDF vectorizers + combined feature matrix.
@@ -51,35 +51,49 @@ def create_tfidf(
     X          : combined sparse feature matrix
     vectorizers: dict with keys "word" and "char" → fitted TfidfVectorizer objects
     """
-    # ── 1. Word TF-IDF ──────────────────────────────────────────────────────
-    word_vec = TfidfVectorizer(
-        max_features=max_word_features,
-        ngram_range=ngram_word,
-        min_df=2,
-        max_df=0.95,  # ignore words in >95% of docs (too generic)
-        sublinear_tf=True,  # log(1+tf) → reduces dominance of frequent terms
-        strip_accents="unicode",
-        analyzer="word",
-    )
-    X_word = word_vec.fit_transform(text_data)
+    # Retry with lighter settings if a machine runs out of memory.
+    configs = [
+        {"word_max": max_word_features, "char_max": max_char_features, "word_min_df": 2, "char_min_df": 3, "char_ngram": ngram_char},
+        {"word_max": 20000, "char_max": 8000, "word_min_df": 3, "char_min_df": 4, "char_ngram": (3, 4)},
+        {"word_max": 12000, "char_max": 4000, "word_min_df": 4, "char_min_df": 5, "char_ngram": (3, 4)},
+    ]
 
-    # ── 2. Char TF-IDF ──────────────────────────────────────────────────────
-    # analyzer="char_wb" wraps words with spaces, avoids cross-word char grams
-    char_vec = TfidfVectorizer(
-        max_features=max_char_features,
-        ngram_range=ngram_char,
-        min_df=3,
-        sublinear_tf=True,
-        strip_accents="unicode",
-        analyzer="char_wb",
-    )
-    X_char = char_vec.fit_transform(text_data)
+    last_error = None
+    for cfg in configs:
+        try:
+            word_vec = TfidfVectorizer(
+                max_features=cfg["word_max"],
+                ngram_range=ngram_word,
+                min_df=cfg["word_min_df"],
+                max_df=0.95,
+                sublinear_tf=True,
+                strip_accents="unicode",
+                analyzer="word",
+            )
+            X_word = word_vec.fit_transform(text_data)
 
-    # ── 3. Horizontally stack both feature matrices ──────────────────────────
-    X_combined = sp.hstack([X_word, X_char], format="csr")
+            char_vec = TfidfVectorizer(
+                max_features=cfg["char_max"],
+                ngram_range=cfg["char_ngram"],
+                min_df=cfg["char_min_df"],
+                sublinear_tf=True,
+                strip_accents="unicode",
+                analyzer="char_wb",
+            )
+            X_char = char_vec.fit_transform(text_data)
 
-    vectorizers = {"word": word_vec, "char": char_vec}
-    return X_combined, vectorizers
+            X_combined = sp.hstack([X_word, X_char], format="csr")
+            vectorizers = {"word": word_vec, "char": char_vec}
+            return X_combined, vectorizers
+        except MemoryError as err:
+            last_error = err
+            continue
+
+    raise MemoryError(
+        "Insufficient memory to build TF-IDF features. "
+        "Try reducing dataset size or feature limits further."
+    ) from last_error
+
 
 
 def add_score_feature(X_sparse, scores, fit: bool = True):

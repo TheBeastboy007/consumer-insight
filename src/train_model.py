@@ -66,7 +66,7 @@ def rebalance_dataset(X_sparse, y_series, strategy: str = "optimal"):
     classes, counts = np.unique(y_arr, return_counts=True)
     count_dict = dict(zip(classes, counts))
 
-    print(f"\n  Rebalancing (strategy='{strategy}') …")
+    print(f"\n  Rebalancing (strategy='{strategy}') ...")
     print(f"  Before: { {k: int(v) for k, v in count_dict.items()} }")
 
     neg_count = count_dict.get("Negative", 0)
@@ -191,7 +191,7 @@ def train_model(
 ):
     # Step 1 — label correction only (score never used as feature)
     if score_series is not None:
-        print(f"  → Label correction (confidence='{score_correction}') …")
+        print(f"  -> Label correction (confidence='{score_correction}') ...")
         y_clean = apply_score_correction(y, score_series, confidence=score_correction)
         corrections = (y_clean != y).sum()
         print(
@@ -212,7 +212,7 @@ def train_model(
         stratify=y_arr,
     )
     print(
-        f"\n  Split — Train: {X_train_raw.shape[0]:,}  Test: {X_test.shape[0]:,}  (no leakage)"
+        f"\n  Split - Train: {X_train_raw.shape[0]:,}  Test: {X_test.shape[0]:,}  (no leakage)"
     )
 
     # Step 3 — rebalance training split only
@@ -227,17 +227,17 @@ def train_model(
     )
     print(f"\n  Class distribution (train):")
     for lbl, cnt in zip(*np.unique(y_train, return_counts=True)):
-        bar = "█" * int(cnt / len(y_train) * 30)
+        bar = "#" * int(cnt / len(y_train) * 30)
         print(f"    {lbl:10s}: {cnt:5,} ({100*cnt/len(y_train):.1f}%) {bar}")
 
     # Step 4 — build and fit
     print(
-        f"\n  Building {'Voting Ensemble (SVM+LR+NB)' if model_type=='ensemble' else model_type.upper()} …"
+        f"\n  Building {'Voting Ensemble (SVM+LR+NB)' if model_type=='ensemble' else model_type.upper()} ..."
     )
     model = (
         build_ensemble() if model_type == "ensemble" else build_single_model(model_type)
     )
-    print(f"  Fitting … (this takes 2-5 minutes)")
+    print("  Fitting ... (this takes 2-5 minutes)")
     model.fit(X_train, y_train)
 
     # Step 5 — evaluate

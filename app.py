@@ -1,10 +1,11 @@
 """
-app.py  —  AI-Driven Consumer Insight System  (v4 — Claude-inspired UI)
+app.py  --  AI-Driven Consumer Insight System  (v4 -- Claude-inspired UI)
 ========================================================================
 Pages:
-  1. 🔍 Predict Sentiment   — review + optional star rating → ensemble prediction
-  2. 📊 Dataset Analytics   — upload CSV OR use default dataset
-  3. 📦 Product Insights    — 6 filter modes with KPI cards
+  1. Predict Sentiment   -- review + optional star rating -> ensemble prediction
+  2. Dataset Analytics   -- upload CSV OR use default dataset
+  3. Product Insights    -- 6 filter modes with KPI cards
+  4. Real-Time Analysis  -- live Amazon reviews via RapidAPI
 """
 
 import io
@@ -19,6 +20,7 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
+from realtime_page import render_realtime_page
 from src.preprocessing import clean_text
 from src.feature_extraction import transform_tfidf, add_score_feature
 from src.train_model import score_to_sentiment
@@ -30,9 +32,9 @@ from src.insights import (
     summary_stats,
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Page config
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Consumer Insight AI",
     page_icon="◆",
@@ -40,13 +42,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CSS — Claude-inspired: warm slate dark, clean typography, subtle accents
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# CSS
+# -----------------------------------------------------------------------------
 st.markdown(
     """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Styrene+A+LC:wght@400;500&family=Söhne:wght@300;400;500&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
 
 :root {
@@ -77,14 +78,12 @@ html, body, [class*="css"] {
 }
 .stApp { background-color: var(--bg-base); }
 
-/* ── Sidebar ── */
 section[data-testid="stSidebar"] {
     background: var(--bg-surface) !important;
     border-right: 1px solid var(--border-subtle) !important;
 }
 section[data-testid="stSidebar"] > div { padding-top: 1.5rem; }
 
-/* ── Metrics ── */
 div[data-testid="metric-container"] {
     background: var(--bg-raised);
     border: 1px solid var(--border-subtle);
@@ -92,9 +91,7 @@ div[data-testid="metric-container"] {
     padding: 18px 20px;
     transition: border-color 0.2s;
 }
-div[data-testid="metric-container"]:hover {
-    border-color: var(--border-mid);
-}
+div[data-testid="metric-container"]:hover { border-color: var(--border-mid); }
 div[data-testid="metric-container"] label {
     color: var(--text-muted) !important;
     font-size: 11px !important;
@@ -109,7 +106,6 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
     font-weight: 500;
 }
 
-/* ── Inputs ── */
 .stTextArea textarea, .stTextInput input {
     background: var(--bg-raised) !important;
     border: 1px solid var(--border-subtle) !important;
@@ -128,7 +124,6 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
     color: var(--text-muted) !important;
 }
 
-/* ── Select / file uploader ── */
 .stSelectbox > div > div {
     background: var(--bg-raised) !important;
     border: 1px solid var(--border-subtle) !important;
@@ -142,7 +137,6 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
     padding: 1rem;
 }
 
-/* ── Buttons ── */
 .stButton > button {
     background: var(--bg-overlay) !important;
     color: var(--text-primary) !important;
@@ -160,11 +154,8 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
     border-color: var(--accent-warm) !important;
     color: var(--accent-warm) !important;
 }
-.stButton > button:active {
-    transform: translateY(1px) !important;
-}
+.stButton > button:active { transform: translateY(1px) !important; }
 
-/* ── Primary CTA button ── */
 .primary-btn > button {
     background: var(--accent-warm) !important;
     color: #1a1915 !important;
@@ -179,7 +170,6 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
     opacity: 0.92;
 }
 
-/* ── Tabs ── */
 .stTabs [data-baseweb="tab-list"] {
     background: transparent;
     border-bottom: 1px solid var(--border-subtle);
@@ -198,18 +188,12 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] {
     border-bottom: 2px solid var(--accent-warm) !important;
 }
 
-/* ── Slider ── */
 .stSlider [data-baseweb="slider"] div[role="slider"] {
     background: var(--accent-warm) !important;
 }
-.stSlider [data-baseweb="slider"] div[data-testid="stTickBar"] {
-    color: var(--text-muted) !important;
-}
 
-/* ── Divider ── */
 hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
 
-/* ── Section labels ── */
 .section-label {
     font-size: 10px;
     font-weight: 600;
@@ -220,7 +204,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
     margin-top: 4px;
 }
 
-/* ── Sentiment badges ── */
 .badge {
     display: inline-flex;
     align-items: center;
@@ -235,7 +218,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
 .badge-Negative { background: rgba(212,107,107,0.12); color: var(--accent-red);   border: 1px solid rgba(212,107,107,0.3); }
 .badge-Neutral  { background: rgba(212,168,83,0.12);  color: var(--accent-amber); border: 1px solid rgba(212,168,83,0.3);  }
 
-/* ── Method badge ── */
 .method-badge {
     display: inline-block;
     padding: 3px 10px;
@@ -250,7 +232,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
     letter-spacing: 0.04em;
 }
 
-/* ── Aspect cards ── */
 .aspect-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .asp-card {
     background: var(--bg-raised);
@@ -274,7 +255,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
 .asp-Negative { color: var(--accent-red);   font-weight: 600; font-size: 14px; }
 .asp-Neutral  { color: var(--accent-amber); font-weight: 600; font-size: 14px; }
 
-/* ── Info / callout box ── */
 .callout {
     background: var(--bg-raised);
     border: 1px solid var(--border-subtle);
@@ -287,7 +267,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
     line-height: 1.6;
 }
 
-/* ── KPI card ── */
 .kpi-card {
     background: var(--bg-raised);
     border: 1px solid var(--border-subtle);
@@ -298,7 +277,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
 }
 .kpi-card:hover { border-color: var(--border-mid); }
 
-/* ── Accuracy banner ── */
 .acc-banner {
     background: var(--bg-raised);
     border: 1px solid rgba(123,196,122,0.25);
@@ -307,7 +285,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
     margin: 12px 0 16px 0;
 }
 
-/* ── Active filter pill ── */
 .filter-active {
     display: inline-block;
     background: rgba(217,119,87,0.12);
@@ -320,7 +297,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
     margin-top: 6px;
 }
 
-/* ── Page title ── */
 .page-title {
     font-family: 'Instrument Serif', serif;
     font-size: 32px;
@@ -336,7 +312,6 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
     margin-bottom: 24px;
 }
 
-/* ── Wordmark ── */
 .wordmark {
     font-family: 'Instrument Serif', serif;
     font-size: 20px;
@@ -346,16 +321,15 @@ hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0; }
 }
 .wordmark span { color: var(--accent-warm); }
 
-/* ── Dataframe ── */
 [data-testid="stDataFrame"] { border-radius: var(--radius-md); overflow: hidden; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Plot theme
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 PLOTLY_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
@@ -371,12 +345,12 @@ SENTIMENT_COLORS = {
     "Negative": "#d46b6b",
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Loaders
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 
-@st.cache_resource(show_spinner="Loading model …")
+@st.cache_resource(show_spinner="Loading model ...")
 def load_model():
     model = pickle.load(open("models/sentiment_model.pkl", "rb"))
     vectorizers = pickle.load(open("models/tfidf_vectorizer.pkl", "rb"))
@@ -387,7 +361,7 @@ def load_model():
     return model, vectorizers, meta
 
 
-@st.cache_data(show_spinner="Loading dataset …")
+@st.cache_data(show_spinner="Loading dataset ...")
 def load_default_data():
     for path in [
         "data/preprocessed_reviews.csv",
@@ -400,22 +374,19 @@ def load_default_data():
 
 
 def run_prediction(text, star_rating, model, vectorizers, meta):
-    """
-    Always runs the NLP model on the text.
-    If a star rating is provided, blends it with the NLP probabilities:
-      - Stars 1/2 → boost Negative probability
-      - Star  3   → boost Neutral probability
-      - Stars 4/5 → boost Positive probability
-    This makes the star rating genuinely influence the output without
-    hardcoding fake confidence values.
-    """
-    # ── Step 1: NLP model on text ────────────────────────────
     cleaned = clean_text(text)
     X = (
         transform_tfidf([cleaned], vectorizers)
         if isinstance(vectorizers, dict)
         else vectorizers.transform([cleaned])
     )
+
+    # If training included score as a feature, append one score column here.
+    # Default to 3 (neutral) when user does not provide a rating.
+    use_score_feature = bool(meta.get("use_score_feature", False))
+    if use_score_feature:
+        score_for_feature = star_rating if star_rating is not None else 3
+        X = add_score_feature(X, [score_for_feature])
 
     if hasattr(model, "predict_proba"):
         proba = model.predict_proba(X)[0]
@@ -437,11 +408,11 @@ def run_prediction(text, star_rating, model, vectorizers, meta):
             c: (1.0 if c == label else 0.0) for c in ["Positive", "Neutral", "Negative"]
         }
 
-    # ── Step 2: blend with star rating prior ────────────────
-    # Star rating gives a soft prior — weight 0.3 star / 0.7 NLP.
-    # This means stars nudge the prediction but the text still dominates.
     STAR_WEIGHT = 0.30
-    if star_rating is not None:
+    if use_score_feature:
+        scores = {k: round(v, 4) for k, v in nlp_prob.items()}
+        method = "◆ NLP + score feature"
+    elif star_rating is not None:
         star_prior = {
             1: {"Negative": 0.85, "Neutral": 0.10, "Positive": 0.05},
             2: {"Negative": 0.70, "Neutral": 0.20, "Positive": 0.10},
@@ -456,16 +427,15 @@ def run_prediction(text, star_rating, model, vectorizers, meta):
                 blended[cls] = (1 - STAR_WEIGHT) * nlp_prob.get(
                     cls, 0.0
                 ) + STAR_WEIGHT * star_prior.get(cls, 0.0)
-            # Renormalise to sum to 1
             total = sum(blended.values())
             scores = {k: round(v / total, 4) for k, v in blended.items()}
-            method = f"◆ NLP + ⭐{star_rating} blend"
+            method = f"NLP + {star_rating} star blend"
         else:
             scores = {k: round(v, 4) for k, v in nlp_prob.items()}
-            method = "◆ NLP Ensemble"
+            method = "NLP Ensemble"
     else:
         scores = {k: round(v, 4) for k, v in nlp_prob.items()}
-        method = "◆ NLP Ensemble"
+        method = "NLP Ensemble"
 
     label = max(scores, key=scores.get)
     confidence = scores[label]
@@ -477,9 +447,9 @@ def run_prediction(text, star_rating, model, vectorizers, meta):
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Sidebar
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown(
         "<div class='wordmark'>Consumer<span>◆</span>Insight</div>",
@@ -490,28 +460,14 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # try:
-    #     _, _, _meta = load_model()
-    #     acc = _meta.get("accuracy", None)
-    #     mtype = _meta.get("model_type", "—")
-    #     feats = _meta.get("features", "—")
-    #     if acc:
-    #         color = (
-    #             "#7bc47a" if acc >= 0.95 else "#d4a853" if acc >= 0.90 else "#d46b6b"
-    #         )
-    #         st.markdown(
-    #             f"<div class='acc-banner'>"
-    #             f"<div class='section-label'>Model Accuracy</div>"
-    #             f"<span style='font-family:IBM Plex Mono,monospace;font-size:28px;font-weight:500;color:{color}'>{acc*100:.2f}%</span>"
-    #             f"</div>",
-    #             unsafe_allow_html=True,
-    #         )
-    # except Exception:
-    #     pass
-
     page = st.radio(
         "Navigation",
-        ["◆ Predict Sentiment", "◈ Dataset Analytics", "◉ Product Insights"],
+        [
+            "◆ Predict Sentiment",
+            "◆ Dataset Analytics",
+            "◆ Product Insights",
+            "◆ Real-Time Analysis",
+        ],
         label_visibility="collapsed",
     )
 
@@ -520,25 +476,13 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    try:
-        st.markdown(
-            f"<div style='font-size:12px;color:var(--text-muted);line-height:1.8'>"
-            f"<b style='color:var(--text-secondary)'>Model</b> &nbsp; {mtype.upper()}<br>"
-            f"<b style='color:var(--text-secondary)'>Features</b> &nbsp; {feats:,}<br>"
-            f"<b style='color:var(--text-secondary)'>Classes</b> &nbsp; Pos · Neu · Neg"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-    except Exception:
-        pass
-
     st.markdown("<br>", unsafe_allow_html=True)
-    st.caption("AI-Driven Consumer Insight System · v4")
+    st.caption("AI-Driven Consumer Insight System")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE 1 — Predict Sentiment
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# PAGE 1 -- Predict Sentiment
+# -----------------------------------------------------------------------------
 if page == "◆ Predict Sentiment":
     st.markdown(
         "<div class='page-title'>Predict Sentiment</div>", unsafe_allow_html=True
@@ -549,9 +493,7 @@ if page == "◆ Predict Sentiment":
     )
 
     st.markdown(
-        "<div class='callout'>Enter any product review below. The NLP ensemble analyses the text "
-        "to predict sentiment. Adding a star rating is optional — it's shown as context and flagged "
-        "if the model disagrees with what the rating suggests.</div>",
+        "<div class='callout'>Enter any product review below. Adding a star rating is optional.</div>",
         unsafe_allow_html=True,
     )
 
@@ -565,17 +507,17 @@ if page == "◆ Predict Sentiment":
     with col_star:
         star_options = {
             "Not provided": None,
-            "⭐ 1 Star": 1,
-            "⭐⭐ 2 Stars": 2,
-            "⭐⭐⭐ 3 Stars": 3,
-            "⭐⭐⭐⭐ 4 Stars": 4,
-            "⭐⭐⭐⭐⭐ 5 Stars": 5,
+            "1 Star": 1,
+            "2 Stars": 2,
+            "3 Stars": 3,
+            "4 Stars": 4,
+            "5 Stars": 5,
         }
         star_choice = st.selectbox("Star Rating (optional)", list(star_options.keys()))
         star_rating = star_options[star_choice]
 
     st.markdown("<div class='primary-btn'>", unsafe_allow_html=True)
-    run = st.button("Analyse Review →", use_container_width=False)
+    run = st.button("Analyse Review", use_container_width=False)
     st.markdown("</div>", unsafe_allow_html=True)
 
     if run:
@@ -587,12 +529,10 @@ if page == "◆ Predict Sentiment":
                 result = run_prediction(
                     review_input, star_rating, model, vectorizers, meta
                 )
-                label, confidence, scores, method = (
-                    result["label"],
-                    result["confidence"],
-                    result["scores"],
-                    result["method"],
-                )
+                label = result["label"]
+                confidence = result["confidence"]
+                scores = result["scores"]
+                method = result["method"]
 
                 st.markdown("---")
                 c1, c2 = st.columns([1, 2])
@@ -603,7 +543,7 @@ if page == "◆ Predict Sentiment":
                         unsafe_allow_html=True,
                     )
                     st.markdown(
-                        f"<div class='badge badge-{label}'>{'✓' if label=='Positive' else '✗' if label=='Negative' else '–'} {label}</div>",
+                        f"<div class='badge badge-{label}'>{'✓' if label=='Positive' else '✗' if label=='Negative' else '-'} {label}</div>",
                         unsafe_allow_html=True,
                     )
                     st.markdown(
@@ -648,7 +588,7 @@ if page == "◆ Predict Sentiment":
                     )
                 else:
                     st.markdown(
-                        "<div class='callout'>No specific aspects detected — try mentioning taste, packaging, price, shipping or quality.</div>",
+                        "<div class='callout'>No specific aspects detected -- try mentioning taste, packaging, price, shipping or quality.</div>",
                         unsafe_allow_html=True,
                     )
 
@@ -659,10 +599,10 @@ if page == "◆ Predict Sentiment":
     st.caption("Tip: 5-star or 1-star + text = maximum accuracy via score rule.")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE 2 — Dataset Analytics
-# ─────────────────────────────────────────────────────────────────────────────
-elif page == "◈ Dataset Analytics":
+# -----------------------------------------------------------------------------
+# PAGE 2 -- Dataset Analytics
+# -----------------------------------------------------------------------------
+elif page == "◆ Dataset Analytics":
     st.markdown(
         "<div class='page-title'>Dataset Analytics</div>", unsafe_allow_html=True
     )
@@ -694,7 +634,7 @@ elif page == "◈ Dataset Analytics":
         st.stop()
 
     if "Cleaned_Text" not in df.columns and "Text" in df.columns:
-        with st.spinner("Cleaning text …"):
+        with st.spinner("Cleaning text ..."):
             df["Cleaned_Text"] = df["Text"].apply(clean_text)
     elif "Cleaned_Text" not in df.columns:
         df["Cleaned_Text"] = ""
@@ -702,22 +642,20 @@ elif page == "◈ Dataset Analytics":
     stats = summary_stats(df)
     dist = stats["sentiment_distribution"]
 
-    # KPI row
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Reviews", f"{stats['total_reviews']:,}")
     c2.metric(
         "Unique Products",
-        f"{stats['unique_products']:,}" if stats["unique_products"] else "—",
+        f"{stats['unique_products']:,}" if stats["unique_products"] else "--",
     )
     c3.metric(
-        "Avg Star Rating", stats["average_score"] if stats["average_score"] else "—"
+        "Avg Star Rating", stats["average_score"] if stats["average_score"] else "--"
     )
-    top_label = max(dist, key=lambda k: dist[k]["count"]) if dist else "—"
+    top_label = max(dist, key=lambda k: dist[k]["count"]) if dist else "--"
     c4.metric("Dominant Sentiment", top_label)
 
     st.markdown("---")
 
-    # Distribution charts
     col_pie, col_bar = st.columns(2)
     pie_df = pd.DataFrame(
         [{"Sentiment": k, "Count": v["count"]} for k, v in dist.items()]
@@ -760,7 +698,6 @@ elif page == "◈ Dataset Analytics":
         fig_bar.update_layout(**PLOTLY_LAYOUT, showlegend=False, height=300)
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Word frequency
     st.markdown("---")
     st.markdown(
         "<div class='section-label'>Top Words by Sentiment</div>",
@@ -793,7 +730,6 @@ elif page == "◈ Dataset Analytics":
             else:
                 st.info(f"No {sk} reviews in this dataset.")
 
-    # Star rating distribution
     if "Score" in df.columns:
         st.markdown("---")
         st.markdown(
@@ -802,13 +738,7 @@ elif page == "◈ Dataset Analytics":
         )
         sc = df["Score"].value_counts().sort_index().reset_index()
         sc.columns = ["Stars", "Count"]
-        fig_sc = px.bar(
-            sc,
-            x="Stars",
-            y="Count",
-            text="Count",
-            color_discrete_sequence=[SENTIMENT_COLORS["Positive"]],
-        )
+        fig_sc = px.bar(sc, x="Stars", y="Count", text="Count")
         fig_sc.update_traces(
             textposition="outside",
             textfont_size=11,
@@ -823,38 +753,43 @@ elif page == "◈ Dataset Analytics":
         fig_sc.update_layout(**PLOTLY_LAYOUT, showlegend=False, height=280)
         st.plotly_chart(fig_sc, use_container_width=True)
 
-    # Business health
     st.markdown("---")
     pos_pct = dist.get("Positive", {}).get("pct", 0)
     neg_pct = dist.get("Negative", {}).get("pct", 0)
     if pos_pct >= 70:
-        health_icon, health_text = "🟢", "Strong — customers are largely satisfied."
-        health_color = "#7bc47a"
-    elif neg_pct >= 30:
-        health_icon, health_text = (
-            "🔴",
-            "Critical — high negative feedback requires immediate action.",
+        health_icon, health_text, health_color = (
+            "🟢",
+            "Strong -- customers are largely satisfied.",
+            "#7bc47a",
         )
-        health_color = "#d46b6b"
+    elif neg_pct >= 30:
+        health_icon, health_text, health_color = (
+            "🔴",
+            "Critical -- high negative feedback requires immediate action.",
+            "#d46b6b",
+        )
     else:
-        health_icon, health_text = "🟡", "Mixed — significant room for improvement."
-        health_color = "#d4a853"
+        health_icon, health_text, health_color = (
+            "🟡",
+            "Mixed -- significant room for improvement.",
+            "#d4a853",
+        )
 
     st.markdown(
         f"<div class='callout'>"
         f"<span style='color:{health_color};font-weight:600'>{health_icon} {health_text}</span><br>"
         f"<span style='color:var(--text-muted);font-size:13px;margin-top:4px;display:block'>"
         f"Positive: <b>{pos_pct}%</b> &nbsp;·&nbsp; Negative: <b>{neg_pct}%</b> &nbsp;·&nbsp; "
-        f"Avg rating: <b>{stats['average_score'] or '—'}</b></span>"
+        f"Avg rating: <b>{stats['average_score'] or '--'}</b></span>"
         f"</div>",
         unsafe_allow_html=True,
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE 3 — Product Insights
-# ─────────────────────────────────────────────────────────────────────────────
-elif page == "◉ Product Insights":
+# -----------------------------------------------------------------------------
+# PAGE 3 -- Product Insights
+# -----------------------------------------------------------------------------
+elif page == "◆ Product Insights":
     st.markdown(
         "<div class='page-title'>Product Insights</div>", unsafe_allow_html=True
     )
@@ -875,7 +810,6 @@ elif page == "◉ Product Insights":
         st.error("Dataset must contain 'ProductId' and 'Sentiment' columns.")
         st.stop()
 
-    # Filter buttons
     st.markdown("<div class='section-label'>Filter Mode</div>", unsafe_allow_html=True)
     FILTER_OPTIONS = {
         "Top Positive": "positive",
@@ -906,10 +840,9 @@ elif page == "◉ Product Insights":
     product_df = product_sentiment_summary(df, top_n=top_n, filter_by=active_filter)
 
     if product_df.empty:
-        st.warning("Not enough data (need ≥ 3 reviews per product).")
+        st.warning("Not enough data (need >= 3 reviews per product).")
         st.stop()
 
-    # KPI cards
     best_row = product_df.loc[product_df["Positive"].idxmax()]
     worst_row = product_df.loc[product_df["Negative"].idxmax()]
 
@@ -936,8 +869,6 @@ elif page == "◉ Product Insights":
         )
 
     st.markdown("---")
-
-    # Stacked bar
     st.markdown(
         "<div class='section-label'>Sentiment Mix per Product</div>",
         unsafe_allow_html=True,
@@ -964,8 +895,6 @@ elif page == "◉ Product Insights":
     )
     st.plotly_chart(fig_stack, use_container_width=True)
 
-    
-    # Table
     st.markdown("---")
     st.markdown(
         "<div class='section-label'>Product Summary</div>", unsafe_allow_html=True
@@ -986,7 +915,6 @@ elif page == "◉ Product Insights":
         hide_index=True,
     )
 
-    # Label breakdown chart
     st.markdown("---")
     st.markdown(
         "<div class='section-label'>Performance Label Distribution</div>",
@@ -1014,3 +942,15 @@ elif page == "◉ Product Insights":
     )
     fig_label.update_layout(**PLOTLY_LAYOUT, showlegend=False, height=260)
     st.plotly_chart(fig_label, use_container_width=True)
+
+
+# -----------------------------------------------------------------------------
+# PAGE 4 -- Real-Time Analysis
+# -----------------------------------------------------------------------------
+elif page == "◆ Real-Time Analysis":
+    try:
+        model, vectorizers, meta = load_model()
+        render_realtime_page(model, vectorizers, meta)
+    except FileNotFoundError:
+        st.error("Model not found. Run `python main.py` to train first.")
+        render_realtime_page(None, None, {})
